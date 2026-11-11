@@ -72,6 +72,12 @@ footer b{color:var(--yellow)}
 .sortbox select{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--ink);background:#fff;font-family:inherit}
 #resultCount{font-size:13px;color:var(--muted);font-weight:600;margin:14px 0 10px}
 .cat-tag{font-size:10.5px;font-weight:700;color:var(--blue);background:#eaf3fd;border-radius:6px;padding:2px 7px;align-self:flex-start;text-transform:uppercase;letter-spacing:.3px}
+.filtergroup{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.macros{display:flex;flex-wrap:wrap;gap:6px}
+.mbtn{border:1px solid var(--navy);background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 14px;border-radius:99px;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.3px;opacity:.55}
+.mbtn span{font-weight:600;opacity:.85}
+.mbtn:hover{opacity:.8}
+.mbtn.active{opacity:1;background:linear-gradient(90deg,var(--blue),var(--blue2));border-color:transparent}
 @media print{.toolbar,#resultCount,#flatGrid{display:none!important}main section{display:block!important}}
 </style></head><body>
 <header class="cover"><div class="flag"><i></i><i></i><i></i></div><div class="wrap">
@@ -81,7 +87,10 @@ footer b{color:var(--yellow)}
 <nav class="idx"><a href="#parlantes">Parlantes<b>8</b></a><a href="#audifonos">Audifonos<b>13</b></a><a href="#relojes">Relojes<b>17</b></a><a href="#proyectores">Proyectores<b>1</b></a><a href="#maquinas-de-afeitar">Cuidado Personal<b>12</b></a><a href="#intercomunicadores">Intercomunicadores<b>4</b></a><a href="#herramientas">Herramientas<b>5</b></a><a href="#accesorios-apple-1-1">Accesorios Apple 1.1<b>8</b></a><a href="#infantil-y-jugueteria">Infantil y juguetería<b>4</b></a><a href="#televisores">Televisores<b>6</b></a><a href="#tenis-hombre">Tenis Originales · Hombre<b>14</b></a><a href="#tenis-mujer">Tenis Originales · Mujer<b>12</b></a><a href="#tenis-ninos">Tenis Originales · Niños<b>12</b></a><a href="#relojes-marca-hombre">Relojes de Marca · Hombre<b>11</b></a><a href="#relojes-marca-mujer">Relojes de Marca · Mujer<b>10</b></a><a href="#otros">TV Box y Otros<b>3</b></a><a href="#guia-tallas">Guía de tallas</a></nav>
 </div></header>
 <div class="toolbar"><div class="wrap">
+<div class="filtergroup">
+<div class="macros" id="macros"></div>
 <div class="filters" id="filters"></div>
+</div>
 <div class="sortbox"><label for="sortSel">Ordenar</label><select id="sortSel">
 <option value="default">Por defecto</option>
 <option value="asc">Precio: menor a mayor</option>
@@ -695,43 +704,77 @@ footer b{color:var(--yellow)}
   var main = document.querySelector('main.wrap');
   var sections = Array.prototype.slice.call(main.querySelectorAll('section')).filter(function(sec){ return sec.querySelector('.card'); });
   var flatGrid = document.getElementById('flatGrid');
+  var macrosEl = document.getElementById('macros');
   var filtersEl = document.getElementById('filters');
   var sortSel = document.getElementById('sortSel');
   var resultCount = document.getElementById('resultCount');
 
+  function macroOf(id){
+    if(/tenis|calzado|zapat/.test(id)) return 'calzado';
+    if(/reloj/.test(id)) return 'relojeria';
+    if(/ropa|camisa|pantal|chaqueta|vestido/.test(id)) return 'ropa';
+    if(/infantil|juguet/.test(id)) return 'infantil';
+    if(/afeitar|cuidado|personal|belleza/.test(id)) return 'hogar';
+    return 'tecnologia';
+  }
+  var macroTitles = {tecnologia:'Tecnología', calzado:'Calzado', relojeria:'Relojería', ropa:'Ropa', infantil:'Infantil', hogar:'Hogar y Cuidado Personal'};
+  var macroOrder = ['tecnologia','calzado','relojeria','ropa','infantil','hogar'];
+
   var cards = [];
   sections.forEach(function(sec){
     var catTitle = sec.querySelector('h2').textContent.trim();
+    var macroId = macroOf(sec.id);
     sec.querySelectorAll('.card').forEach(function(card){
       var priceEl = card.querySelector('.now');
       var price = priceEl ? parseInt(priceEl.textContent.replace(/[^0-9]/g,''),10) || 0 : 0;
-      cards.push({catId:sec.id, catTitle:catTitle, price:price, el:card});
+      cards.push({catId:sec.id, catTitle:catTitle, macroId:macroId, price:price, el:card});
     });
   });
 
-  var cats = [{id:'all', title:'Todas', count:cards.length}];
-  sections.forEach(function(sec){
-    cats.push({id:sec.id, title:sec.querySelector('h2').textContent.trim(), count:sec.querySelectorAll('.card').length});
-  });
-  filtersEl.innerHTML = cats.map(function(c){
-    return '<button class="fbtn'+(c.id==='all'?' active':'')+'" data-cat="'+c.id+'">'+c.title+' <span>('+c.count+')</span></button>';
-  }).join('');
-
+  var currentMacro = 'all';
   var currentCat = 'all';
   var currentSort = 'default';
+
+  function renderMacros(){
+    var counts = {};
+    cards.forEach(function(c){ counts[c.macroId] = (counts[c.macroId]||0)+1; });
+    var list = [{id:'all', title:'Todas las categorías', count:cards.length}];
+    macroOrder.forEach(function(id){
+      if(counts[id]) list.push({id:id, title:macroTitles[id], count:counts[id]});
+    });
+    macrosEl.innerHTML = list.map(function(m){
+      return '<button class="mbtn'+(m.id===currentMacro?' active':'')+'" data-macro="'+m.id+'">'+m.title+' <span>('+m.count+')</span></button>';
+    }).join('');
+  }
+
+  function renderFilters(){
+    var relevant = sections.filter(function(sec){ return currentMacro==='all' || macroOf(sec.id)===currentMacro; });
+    var totalCount = cards.filter(function(c){ return currentMacro==='all' || c.macroId===currentMacro; }).length;
+    var cats = [{id:'all', title:'Todas', count:totalCount}];
+    relevant.forEach(function(sec){
+      cats.push({id:sec.id, title:sec.querySelector('h2').textContent.trim(), count:sec.querySelectorAll('.card').length});
+    });
+    filtersEl.innerHTML = cats.map(function(c){
+      return '<button class="fbtn'+(c.id===currentCat?' active':'')+'" data-cat="'+c.id+'">'+c.title+' <span>('+c.count+')</span></button>';
+    }).join('');
+  }
 
   function render(){
     if(currentSort === 'default'){
       flatGrid.classList.add('hidden');
       resultCount.classList.add('hidden');
       sections.forEach(function(sec){
-        sec.classList.toggle('hidden', !(currentCat==='all' || currentCat===sec.id));
+        var inMacro = currentMacro==='all' || macroOf(sec.id)===currentMacro;
+        var inCat = currentCat==='all' || currentCat===sec.id;
+        sec.classList.toggle('hidden', !(inMacro && inCat));
       });
     } else {
       sections.forEach(function(sec){ sec.classList.add('hidden'); });
       flatGrid.classList.remove('hidden');
       resultCount.classList.remove('hidden');
-      var list = cards.filter(function(c){ return currentCat==='all' || c.catId===currentCat; });
+      var list = cards.filter(function(c){
+        return (currentMacro==='all' || c.macroId===currentMacro) && (currentCat==='all' || c.catId===currentCat);
+      });
       list = list.slice().sort(function(a,b){ return currentSort==='asc' ? a.price-b.price : b.price-a.price; });
       flatGrid.innerHTML = '';
       list.forEach(function(item){
@@ -749,6 +792,16 @@ footer b{color:var(--yellow)}
     }
   }
 
+  macrosEl.addEventListener('click', function(e){
+    var btn = e.target.closest('.mbtn');
+    if(!btn) return;
+    currentMacro = btn.getAttribute('data-macro');
+    currentCat = 'all';
+    renderMacros();
+    renderFilters();
+    render();
+  });
+
   filtersEl.addEventListener('click', function(e){
     var btn = e.target.closest('.fbtn');
     if(!btn) return;
@@ -762,6 +815,8 @@ footer b{color:var(--yellow)}
     render();
   });
 
+  renderMacros();
+  renderFilters();
   render();
 })();
 </script></body></html>
