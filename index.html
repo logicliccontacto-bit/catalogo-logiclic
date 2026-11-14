@@ -92,6 +92,13 @@ footer b{color:var(--yellow)}
 .mbtn span{font-weight:600;opacity:.85}
 .mbtn:hover{opacity:.8}
 .mbtn.active{opacity:1;background:linear-gradient(90deg,var(--blue),var(--blue2));border-color:transparent}
+.origins{display:flex;gap:8px}
+.obtn{flex:1;border:none;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;color:#fff;background:var(--navy);opacity:.55;text-align:center;line-height:1.3}
+.obtn span{display:block;font-weight:600;opacity:.85;font-size:11px;margin-top:2px}
+.obtn.active{opacity:1}
+.obtn[data-origin="usa"]{background:linear-gradient(135deg,#3c3b6e,#b22234)}
+.obtn[data-origin="co"]{background:linear-gradient(135deg,#ffcd00,#003893);color:#1a1d29}
+.obtn[data-origin="co"] span{opacity:.7}
 .mbtn,.fbtn{flex:0 0 auto;white-space:nowrap}
 @media (max-width:640px){
   .toolbar .wrap{flex-direction:column;align-items:stretch;gap:8px;padding:10px 12px}
@@ -130,6 +137,7 @@ footer b{color:var(--yellow)}
 </div></header>
 <div class="toolbar"><div class="wrap">
 <div class="filtergroup">
+<div class="origins" id="origins"></div>
 <div class="scrollrow">
 <button class="scroll-arrow rowarrow" data-target="macros" data-dir="-1" type="button" aria-label="Anterior">‹</button>
 <div class="macros" id="macros"></div>
@@ -993,10 +1001,21 @@ footer b{color:var(--yellow)}
   var macroTitles = {tecnologia:'Tecnología', calzado:'Calzado', relojeria:'Relojería', ropa:'Ropa', infantil:'Infantil', hogar:'Hogar y Cuidado Personal', salud:'Suplementos y Nutrición'};
   var macroOrder = ['tecnologia','calzado','relojeria','ropa','infantil','hogar','salud'];
 
+  function originOf(src){
+    if(!src) return 'co';
+    return /nike\.com|puma\.com|skechers\.com|shopify\.com|movadocompanystore\.com/.test(src) ? 'usa' : 'co';
+  }
+  var originTitles = {usa:'\uD83C\uDDFA\uD83C\uDDF8 Importados', co:'\uD83C\uDDE8\uD83C\uDDF4 Nacionales'};
+  var originOrder = ['usa','co'];
+  var sectionOrigin = {};
+
   var cards = [];
   sections.forEach(function(sec){
     var catTitle = sec.querySelector('h2').textContent.trim();
     var macroId = macroOf(sec.id);
+    var firstImg = sec.querySelector('.card img');
+    var originId = originOf(firstImg ? firstImg.getAttribute('src') : '');
+    sectionOrigin[sec.id] = originId;
     sec.querySelectorAll('.card').forEach(function(card){
       var priceEl = card.querySelector('.now');
       var price = priceEl ? parseInt(priceEl.textContent.replace(/[^0-9]/g,''),10) || 0 : 0;
@@ -1008,18 +1027,33 @@ footer b{color:var(--yellow)}
         var pricesBox = card.querySelector('.prices');
         if(pricesBox) pricesBox.insertAdjacentElement('afterend', addBtn);
       }
-      cards.push({catId:sec.id, catTitle:catTitle, macroId:macroId, price:price, el:card});
+      cards.push({catId:sec.id, catTitle:catTitle, macroId:macroId, originId:originId, price:price, el:card});
     });
   });
 
+  var originsEl = document.getElementById('origins');
+  var currentOrigin = 'all';
   var currentMacro = 'all';
   var currentCat = 'all';
   var currentSort = 'default';
 
-  function renderMacros(){
+  function renderOrigins(){
     var counts = {};
-    cards.forEach(function(c){ counts[c.macroId] = (counts[c.macroId]||0)+1; });
-    var list = [{id:'all', title:'Todas las categorías', count:cards.length}];
+    cards.forEach(function(c){ counts[c.originId] = (counts[c.originId]||0)+1; });
+    var list = [{id:'all', title:'Todos los artículos', count:cards.length}];
+    originOrder.forEach(function(id){
+      if(counts[id]) list.push({id:id, title:originTitles[id], count:counts[id]});
+    });
+    originsEl.innerHTML = list.map(function(o){
+      return '<button class="obtn'+(o.id===currentOrigin?' active':'')+'" data-origin="'+o.id+'" type="button">'+o.title+'<span>('+o.count+')</span></button>';
+    }).join('');
+  }
+
+  function renderMacros(){
+    var scoped = cards.filter(function(c){ return currentOrigin==='all' || c.originId===currentOrigin; });
+    var counts = {};
+    scoped.forEach(function(c){ counts[c.macroId] = (counts[c.macroId]||0)+1; });
+    var list = [{id:'all', title:'Todas las categorías', count:scoped.length}];
     macroOrder.forEach(function(id){
       if(counts[id]) list.push({id:id, title:macroTitles[id], count:counts[id]});
     });
@@ -1029,8 +1063,12 @@ footer b{color:var(--yellow)}
   }
 
   function renderFilters(){
-    var relevant = sections.filter(function(sec){ return currentMacro==='all' || macroOf(sec.id)===currentMacro; });
-    var totalCount = cards.filter(function(c){ return currentMacro==='all' || c.macroId===currentMacro; }).length;
+    var relevant = sections.filter(function(sec){
+      return (currentOrigin==='all' || sectionOrigin[sec.id]===currentOrigin) && (currentMacro==='all' || macroOf(sec.id)===currentMacro);
+    });
+    var totalCount = cards.filter(function(c){
+      return (currentOrigin==='all' || c.originId===currentOrigin) && (currentMacro==='all' || c.macroId===currentMacro);
+    }).length;
     var cats = [{id:'all', title:'Todas', count:totalCount}];
     relevant.forEach(function(sec){
       cats.push({id:sec.id, title:sec.querySelector('h2').textContent.trim(), count:sec.querySelectorAll('.card').length});
@@ -1046,16 +1084,17 @@ footer b{color:var(--yellow)}
       flatGrid.classList.add('hidden');
       resultCount.classList.add('hidden');
       sections.forEach(function(sec){
+        var inOrigin = currentOrigin==='all' || sectionOrigin[sec.id]===currentOrigin;
         var inMacro = currentMacro==='all' || macroOf(sec.id)===currentMacro;
         var inCat = currentCat==='all' || currentCat===sec.id;
-        sec.classList.toggle('hidden', !(inMacro && inCat));
+        sec.classList.toggle('hidden', !(inOrigin && inMacro && inCat));
       });
     } else {
       sections.forEach(function(sec){ sec.classList.add('hidden'); });
       flatGrid.classList.remove('hidden');
       resultCount.classList.remove('hidden');
       var list = cards.filter(function(c){
-        return (currentMacro==='all' || c.macroId===currentMacro) && (currentCat==='all' || c.catId===currentCat);
+        return (currentOrigin==='all' || c.originId===currentOrigin) && (currentMacro==='all' || c.macroId===currentMacro) && (currentCat==='all' || c.catId===currentCat);
       });
       list = list.slice().sort(function(a,b){ return currentSort==='asc' ? a.price-b.price : b.price-a.price; });
       flatGrid.innerHTML = '';
@@ -1155,6 +1194,19 @@ footer b{color:var(--yellow)}
     var lines = items.map(function(it){ return '\u2022 ' + it.title + ' x' + it.qty + ' \u2014 ' + fmtCOP(it.price*it.qty); });
     var msg = 'Hola Logiclic, quiero hacer este pedido:\n\n' + lines.join('\n') + '\n\nTotal: ' + fmtCOP(cartTotal());
     window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg), '_blank');
+  });
+
+  originsEl.addEventListener('click', function(e){
+    var btn = e.target.closest('.obtn');
+    if(!btn) return;
+    currentOrigin = btn.getAttribute('data-origin');
+    currentMacro = 'all';
+    currentCat = 'all';
+    renderOrigins();
+    renderOrigins();
+  renderMacros();
+    renderFilters();
+    render();
   });
 
   macrosEl.addEventListener('click', function(e){
