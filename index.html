@@ -8,10 +8,10 @@ html,body{max-width:100%;overflow-x:hidden}
 body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .wrap{max-width:1040px;margin:0 auto;padding:0 16px}
 .cover{background:var(--navy);color:#fff;position:relative;overflow:hidden}
-.cover .wrap{padding-top:40px;padding-bottom:44px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px}
-.cover img.brandlogo{width:min(360px,80%);height:auto;display:block;margin:0 auto}
-.cover h1{font-family:Poppins;font-weight:800;font-size:clamp(30px,6vw,48px);letter-spacing:-.5px}
-.cover p{opacity:.85;font-size:15px}
+.cover .wrap{padding-top:18px;padding-bottom:18px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px}
+.cover img.brandlogo{width:min(190px,55%);height:auto;display:block;margin:0 auto}
+.cover h1{font-family:Poppins;font-weight:800;font-size:clamp(20px,4.2vw,30px);letter-spacing:-.5px}
+.cover p{opacity:.85;font-size:12.5px}
 .flag{height:10px;background:linear-gradient(90deg,var(--blue),var(--blue2))}
 .idx{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;width:100%;max-width:760px;justify-content:flex-start;padding:2px 2px 6px}
 .idx::-webkit-scrollbar{display:none}
@@ -73,7 +73,13 @@ footer b{color:var(--yellow)}
 }
 .hidden{display:none!important}
 .toolbar{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line)}
-.toolbar .wrap{padding:12px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;max-width:100%}
+.toolbar .wrap{padding:12px 16px;display:flex;flex-direction:column;gap:10px;max-width:100%}
+.toolbar-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.searchbar{display:flex;align-items:center;gap:8px;background:#f4f5f9;border:1px solid var(--line);border-radius:10px;padding:4px 4px 4px 14px}
+.searchbar input{flex:1;min-width:0;border:none;background:transparent;font-size:14px;font-family:inherit;color:var(--ink);outline:none;padding:8px 0}
+.searchbar input::placeholder{color:var(--muted)}
+.search-btn{flex:0 0 auto;width:34px;height:34px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+@media print{.searchbar{display:none!important}}
 .filters{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .filters::-webkit-scrollbar{display:none}
 .fbtn{border:1px solid var(--line);background:#fff;color:var(--navy);font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:99px;cursor:pointer;font-family:inherit}
@@ -136,6 +142,8 @@ footer b{color:var(--yellow)}
 
 </div></header>
 <div class="toolbar"><div class="wrap">
+<div class="searchbar"><input id="searchInput" type="text" placeholder="Buscar productos..." autocomplete="off"><button class="search-btn" type="button" aria-label="Buscar">🔍</button></div>
+<div class="toolbar-row">
 <div class="filtergroup">
 <div class="origins" id="origins"></div>
 <div class="scrollrow">
@@ -154,6 +162,7 @@ footer b{color:var(--yellow)}
 <option value="asc">Precio: menor a mayor</option>
 <option value="desc">Precio: mayor a menor</option>
 </select></div>
+</div>
 </div></div>
 <main class="wrap">
 <div id="resultCount" class="hidden"></div>
@@ -1027,10 +1036,15 @@ footer b{color:var(--yellow)}
         var pricesBox = card.querySelector('.prices');
         if(pricesBox) pricesBox.insertAdjacentElement('afterend', addBtn);
       }
+      var prodH3 = card.querySelector('h3');
+      var featLis = Array.prototype.map.call(card.querySelectorAll('.feat li'), function(li){ return li.textContent; }).join(' ');
+      card.setAttribute('data-search', ((prodH3?prodH3.textContent:'') + ' ' + featLis).toLowerCase());
       cards.push({catId:sec.id, catTitle:catTitle, macroId:macroId, originId:originId, price:price, el:card});
     });
   });
 
+  var searchInput = document.getElementById('searchInput');
+  var searchQuery = '';
   var originsEl = document.getElementById('origins');
   var currentOrigin = 'all';
   var currentMacro = 'all';
@@ -1083,18 +1097,34 @@ footer b{color:var(--yellow)}
     if(currentSort === 'default'){
       flatGrid.classList.add('hidden');
       resultCount.classList.add('hidden');
+      var totalVisible = 0;
       sections.forEach(function(sec){
         var inOrigin = currentOrigin==='all' || sectionOrigin[sec.id]===currentOrigin;
         var inMacro = currentMacro==='all' || macroOf(sec.id)===currentMacro;
         var inCat = currentCat==='all' || currentCat===sec.id;
-        sec.classList.toggle('hidden', !(inOrigin && inMacro && inCat));
+        var baseVisible = inOrigin && inMacro && inCat;
+        var anyCardVisible = false;
+        var cardEls = sec.querySelectorAll('.card');
+        for(var i=0;i<cardEls.length;i++){
+          var cardEl = cardEls[i];
+          var matches = !searchQuery || (cardEl.getAttribute('data-search')||'').indexOf(searchQuery) > -1;
+          var show = baseVisible && matches;
+          cardEl.classList.toggle('hidden', !show);
+          if(show){ anyCardVisible = true; totalVisible++; }
+        }
+        sec.classList.toggle('hidden', !(baseVisible && anyCardVisible));
       });
+      if(searchQuery){
+        resultCount.classList.remove('hidden');
+        resultCount.textContent = totalVisible + (totalVisible===1 ? ' resultado' : ' resultados');
+      }
     } else {
       sections.forEach(function(sec){ sec.classList.add('hidden'); });
       flatGrid.classList.remove('hidden');
       resultCount.classList.remove('hidden');
       var list = cards.filter(function(c){
-        return (currentOrigin==='all' || c.originId===currentOrigin) && (currentMacro==='all' || c.macroId===currentMacro) && (currentCat==='all' || c.catId===currentCat);
+        var matches = !searchQuery || (c.el.getAttribute('data-search')||'').indexOf(searchQuery) > -1;
+        return matches && (currentOrigin==='all' || c.originId===currentOrigin) && (currentMacro==='all' || c.macroId===currentMacro) && (currentCat==='all' || c.catId===currentCat);
       });
       list = list.slice().sort(function(a,b){ return currentSort==='asc' ? a.price-b.price : b.price-a.price; });
       flatGrid.innerHTML = '';
@@ -1194,6 +1224,11 @@ footer b{color:var(--yellow)}
     var lines = items.map(function(it){ return '\u2022 ' + it.title + ' x' + it.qty + ' \u2014 ' + fmtCOP(it.price*it.qty); });
     var msg = 'Hola Logiclic, quiero hacer este pedido:\n\n' + lines.join('\n') + '\n\nTotal: ' + fmtCOP(cartTotal());
     window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg), '_blank');
+  });
+
+  searchInput.addEventListener('input', function(){
+    searchQuery = searchInput.value.trim().toLowerCase();
+    render();
   });
 
   originsEl.addEventListener('click', function(e){
